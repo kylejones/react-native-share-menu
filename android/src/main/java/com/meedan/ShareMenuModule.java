@@ -10,14 +10,17 @@ import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import android.app.Activity;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.documentfile.provider.DocumentFile;
 
 import java.util.ArrayList;
 
@@ -27,8 +30,10 @@ public class ShareMenuModule extends ReactContextBaseJavaModule implements Activ
   final String NEW_SHARE_EVENT = "NewShareEvent";
 
   // Keys
+  final String FILE_NAME_KEY = "fileName";
   final String MIME_TYPE_KEY = "mimeType";
   final String DATA_KEY = "data";
+  final String SIZE_KEY = "size";
 
   private ReactContext mReactContext;
 
@@ -58,15 +63,26 @@ public class ShareMenuModule extends ReactContextBaseJavaModule implements Activ
     WritableMap data = Arguments.createMap();
     data.putString(MIME_TYPE_KEY, type);
 
+    ContentResolver cR = getReactApplicationContext().getContentResolver();
+
     if (Intent.ACTION_SEND.equals(action)) {
       if ("text/plain".equals(type)) {
-        data.putString(DATA_KEY, intent.getStringExtra(Intent.EXTRA_TEXT));
+        WritableNativeMap writableNativeMap = new WritableNativeMap();
+        writableNativeMap.putString(DATA_KEY,intent.getStringExtra(Intent.EXTRA_TEXT));
+        writableNativeMap.putString(MIME_TYPE_KEY,"text/plain");
+        data.putMap(DATA_KEY, writableNativeMap);
         return data;
       }
 
       Uri fileUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
       if (fileUri != null) {
-        data.putString(DATA_KEY, fileUri.toString());
+        DocumentFile file = DocumentFile.fromSingleUri(this.getReactApplicationContext(), fileUri);
+        WritableNativeMap writableNativeMap = new WritableNativeMap();
+        writableNativeMap.putString(DATA_KEY, file.getUri().toString());
+        writableNativeMap.putString(FILE_NAME_KEY, file.getName());
+        writableNativeMap.putString(MIME_TYPE_KEY, cR.getType(fileUri));
+        writableNativeMap.putDouble(SIZE_KEY, file.length());
+        data.putMap(DATA_KEY, writableNativeMap);
         return data;
       }
     } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
@@ -74,7 +90,13 @@ public class ShareMenuModule extends ReactContextBaseJavaModule implements Activ
       if (fileUris != null) {
         WritableArray uriArr = Arguments.createArray();
         for (Uri uri : fileUris) {
-          uriArr.pushString(uri.toString());
+          DocumentFile file = DocumentFile.fromSingleUri(this.getReactApplicationContext(), uri);
+          WritableNativeMap writableNativeMap = new WritableNativeMap();
+          writableNativeMap.putString(DATA_KEY, file.getUri().toString());
+          writableNativeMap.putString(FILE_NAME_KEY, file.getName());
+          writableNativeMap.putString(MIME_TYPE_KEY, cR.getType(uri));
+          writableNativeMap.putDouble(SIZE_KEY, file.length());
+          uriArr.pushMap(writableNativeMap);
         }
         data.putArray(DATA_KEY, uriArr);
         return data;
@@ -106,7 +128,7 @@ public class ShareMenuModule extends ReactContextBaseJavaModule implements Activ
     }
 
     Intent intent = currentActivity.getIntent();
-    
+
     ReadableMap shared = extractShared(intent);
     successCallback.invoke(shared);
     clearSharedText();
@@ -124,7 +146,7 @@ public class ShareMenuModule extends ReactContextBaseJavaModule implements Activ
 
   public void clearSharedText() {
     Activity mActivity = getCurrentActivity();
-    
+
     if(mActivity == null) { return; }
 
     Intent intent = mActivity.getIntent();
