@@ -73,7 +73,6 @@ class ShareViewController: SLComposeServiceViewController {
       }
 
       let semaphore = DispatchSemaphore(value: 0)
-      var results: [Any] = []
 
       for item in items {
         guard let attachments = item.attachments else {
@@ -155,7 +154,7 @@ class ShareViewController: SLComposeServiceViewController {
         return
       }
       
-      self.sharedItems.append([DATA_KEY: url.absoluteString, MIME_TYPE_KEY: "text/plain"])
+      self.sharedItems.append([DATA_KEY: url.absoluteString, FILE_NAME_KEY: url.lastPathComponent, MIME_TYPE_KEY: "text/plain", SIZE_KEY: self.getFileSize(from: url)])
       semaphore.signal()
     }
   }
@@ -166,7 +165,14 @@ class ShareViewController: SLComposeServiceViewController {
         self.exit(withError: error.debugDescription)
         return
       }
-      guard let url = data as? URL else {
+      var url: URL? = nil
+      if let u = data as? URL {
+        url = u
+      } else if let d = data as? Data {
+        let urls = try! PropertyListSerialization.propertyList(from:d, format: nil) as! NSArray
+        url = URL.init(string: urls[0] as! String)
+      }
+      if url == nil {
         self.exit(withError: COULD_NOT_FIND_IMG_ERROR)
         return
       }
@@ -181,18 +187,18 @@ class ShareViewController: SLComposeServiceViewController {
         return
       }
       
-      let mimeType = url.extractMimeType()
-      let fileExtension = url.pathExtension
+      let mimeType = url!.extractMimeType()
+      let fileExtension = url!.pathExtension
       let fileName = UUID().uuidString
       let filePath = groupFileManagerContainer
         .appendingPathComponent("\(fileName).\(fileExtension)")
       
-      guard self.moveFileToDisk(from: url, to: filePath) else {
+      guard self.moveFileToDisk(from: url!, to: filePath) else {
         self.exit(withError: COULD_NOT_SAVE_FILE_ERROR)
         return
       }
       
-      self.sharedItems.append([DATA_KEY: filePath.absoluteString, MIME_TYPE_KEY: mimeType])
+      self.sharedItems.append([DATA_KEY: filePath.absoluteString, FILE_NAME_KEY: url!.lastPathComponent, MIME_TYPE_KEY: mimeType, SIZE_KEY: self.getFileSize(from: filePath)])
       semaphore.signal()
     }
   }
@@ -244,5 +250,14 @@ class ShareViewController: SLComposeServiceViewController {
   func cancelRequest() {
     extensionContext!.cancelRequest(withError: NSError())
   }
-
+  
+  func getFileSize(from url: URL) -> String {
+      do {
+          let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+          let fileSize = attrs[FileAttributeKey.size] as! UInt64
+          return String(fileSize)
+      } catch {
+          return "0"
+      }
+  }
 }

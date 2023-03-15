@@ -18,7 +18,7 @@ public class ShareMenuReactView: NSObject {
     }
 
     public static func attachViewDelegate(_ delegate: ReactShareViewDelegate!) {
-        guard (ShareMenuReactView.viewDelegate == nil) else { return }
+//        guard (ShareMenuReactView.viewDelegate == nil) else { return }
 
         ShareMenuReactView.viewDelegate = delegate
     }
@@ -110,7 +110,7 @@ public class ShareMenuReactView: NSObject {
                         provider.loadItem(forTypeIdentifier: kUTTypeURL as String, options: nil) { (item, error) in
                             let url: URL! = item as? URL
 
-                            results.append([DATA_KEY: url.absoluteString, MIME_TYPE_KEY: "text/plain"])
+                            results.append([DATA_KEY: url.absoluteString, FILE_NAME_KEY: url.lastPathComponent, MIME_TYPE_KEY: "text/plain", SIZE_KEY: self.getFileSize(from: url)])
 
                             semaphore.signal()
                         }
@@ -130,7 +130,7 @@ public class ShareMenuReactView: NSObject {
 
                             if (imageUrl != nil) {
                                 if let imageData = try? Data(contentsOf: imageUrl) {
-                                    results.append([DATA_KEY: imageUrl.absoluteString, MIME_TYPE_KEY: self.extractMimeType(from: imageUrl)])
+                                    results.append([DATA_KEY: imageUrl.absoluteString, FILE_NAME_KEY: imageUrl.lastPathComponent, MIME_TYPE_KEY: self.extractMimeType(from: imageUrl), SIZE_KEY: self.getFileSize(from: imageUrl)])
                                 }
                             } else {
                                 let image: UIImage! = item as? UIImage
@@ -147,7 +147,8 @@ public class ShareMenuReactView: NSObject {
                                         // Writing the image to the URL
                                         try imageData.write(to: imageURL)
 
-                                        results.append([DATA_KEY: imageUrl.absoluteString, MIME_TYPE_KEY: imageURL.extractMimeType()])
+                                        results.append([DATA_KEY: imageUrl.absoluteString, FILE_NAME_KEY: imageUrl.lastPathComponent,
+                                                   MIME_TYPE_KEY: imageURL.extractMimeType(), SIZE_KEY: self.getFileSize(from: imageUrl)])
                                     } catch {
                                         callback(nil, NSException(name: NSExceptionName(rawValue: "Error"), reason:"Can't load image", userInfo:nil))
                                     }
@@ -161,7 +162,7 @@ public class ShareMenuReactView: NSObject {
                         provider.loadItem(forTypeIdentifier: kUTTypeData as String, options: nil) { (item, error) in
                             let url: URL! = item as? URL
 
-                            results.append([DATA_KEY: url.absoluteString, MIME_TYPE_KEY: self.extractMimeType(from: url)])
+                            results.append([DATA_KEY: url.absoluteString, FILE_NAME_KEY: url.lastPathComponent, MIME_TYPE_KEY: self.extractMimeType(from: url), SIZE_KEY: self.getFileSize(from: url)])
 
                             semaphore.signal()
                         }
@@ -188,5 +189,15 @@ public class ShareMenuReactView: NSObject {
       else { return "" }
 
       return mimeUTI.takeUnretainedValue() as String
+    }
+    
+    func getFileSize(from url: URL) -> String {
+        do {
+            let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+            let fileSize = attrs[FileAttributeKey.size] as! UInt64
+            return String(fileSize)
+        } catch {
+            return "0"
+        }
     }
 }
